@@ -65,4 +65,47 @@ class FMModel(tf.keras.Model):
         embedding_sum_square = tf.math.square(tf.math.reduce_sum(embedding_tensor, axis=1))
         embedding_square_sum = tf.math.reduce_sum(tf.math.square(embedding_tensor), axis=1)
         embedding_logits = tf.math.reduce_sum(embedding_sum_square - embedding_square_sum, axis=1) * 0.5
-        return linear_logits + embedding_logits
+        logits = linear_logits + embedding_logits
+        predict = tf.keras.activations.sigmoid(logits)
+        return predict
+
+
+def main(_):
+    import os
+    titanic_train_data_path = os.path.abspath(__file__).replace("models/rank/ml/fm.py", "data/titanic/train.csv")
+
+    train_data = tf.data.experimental.make_csv_dataset(
+        file_pattern=titanic_train_data_path,
+        batch_size=10,
+        column_names=["PassengerId", "Survived", "Pclass", "Name", "Sex", "Age", "SibSp", "Parch", "Ticket", "Fare",
+                      "Cabin", "Embarked"],
+        column_defaults=[0, 0, "", "", 0.0, 0, 0, "", 0.0, "", ""],
+        label_name="Survived",
+        select_columns=["Survived", "Pclass", "Name", "Sex", "Age", "SibSp", "Parch", "Ticket", "Fare", "Cabin",
+                        "Embarked"],
+        field_delim=",",
+        use_quote_delim=True,
+        na_value="",
+        header=True,
+        num_epochs=1,
+        shuffle=True,
+        shuffle_buffer_size=1000,
+        num_rows_for_inference=0,
+        ignore_errors=False)
+
+    feature_columns = [
+        tf.feature_column.categorical_column_with_vocabulary_list(key="Pclass", vocabulary_list=[1, 2, 3]),
+        tf.feature_column.categorical_column_with_vocabulary_list(key="Sex", vocabulary_list=["female", "male"]),
+        tf.feature_column.bucketized_column(source_column=tf.feature_column.numeric_column(key="Age"),
+                                            boundaries=[1, 6, 14, 18, 30, 40, 50, 60, 70]),
+    ]
+
+    model = FMModel(latent_dim=10, columns=feature_columns, l2_factor=0.5)
+    model.compile(optimizer=tf.keras.optimizers.SGD(learning_rate=0.001),
+                  loss=tf.keras.losses.binary_crossentropy)
+    model.fit(x=train_data, epochs=10)
+    tf.keras.utils.plot_model(model, to_file="lr.png")
+
+
+if __name__ == "__main__":
+    app.run(main)

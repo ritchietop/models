@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.python.feature_column.feature_column_lib import CategoricalColumn
 from tensorflow.python.feature_column.feature_column_v2 import FeatureTransformationCache, _StateManagerImplV2
+from absl import app
 
 
 class SVDModel(tf.keras.Model):
@@ -34,12 +35,14 @@ class SVDModel(tf.keras.Model):
             feature_column=self.user_column,
             name="embeddings",
             shape=(self.user_column.num_buckets, self.latent_dim),
+            initializer=tf.keras.initializers.random_uniform,
             dtype=self.dtype,
             trainable=True)
         self.state_manager.create_variable(
             feature_column=self.item_column,
             name="embeddings",
             shape=(self.item_column.num_buckets, self.latent_dim),
+            initializer=tf.keras.initializers.random_uniform,
             dtype=self.dtype,
             trainable=True)
         self.user_bias = self.add_weight(
@@ -67,9 +70,41 @@ class SVDModel(tf.keras.Model):
             sparse_ids=item_sparse_tensors.id_tensor,
             sparse_weights=item_sparse_tensors.weight_tensor)
         self.add_loss(self.regularizer(item_embedding))
-        score_no_bias = tf.math.reduce_sum(tf.math.multiply(user_embedding, item_embedding), axis=1)
+        score_no_bias = tf.math.reduce_sum(tf.math.multiply(user_embedding, item_embedding), axis=1, keepdims=True)
         bias = self.average_score + self.user_bias + self.item_bias
         self.add_loss(self.regularizer(self.user_bias))
         self.add_loss(self.regularizer(self.item_bias))
         score = tf.nn.bias_add(score_no_bias, bias)
         return score
+
+
+def main(_):
+    import os
+    movie_ratings_path = os.path.abspath(__file__).replace("models/rank/ml/svd.py", "data/movieLens/ml-1m/ratings.dat")
+    data = tf.data.experimental.make_csv_dataset(
+        file_pattern=movie_ratings_path,
+        batch_size=300,
+        column_names=["user_id", "1", "item_id", "2", "rating", "3", "timestamp"],
+        select_columns=["user_id", "item_id", "rating"],
+        column_defaults=[0, 0, 0],
+        label_name="rating",
+        field_delim=":",
+        use_quote_delim=False,
+        header=False,
+        num_epochs=1,
+        shuffle=False,
+        shuffle_buffer_size=500)
+
+    model = SVDModel(average_score=3.58, latent_dim=50,
+                     user_column=tf.feature_column.categorical_column_with_identity(key="user_id", num_buckets=6041),
+                     item_column=tf.feature_column.categorical_column_with_identity(key="item_id", num_buckets=4000),
+                     l2_factor=0.5)
+    model.compile(optimizer=tf.keras.optimizers.SGD(learning_rate=0.0001),
+                  loss=tf.keras.losses.mean_squared_error,
+                  metrics=tf.keras.metrics.mean_squared_error)
+    model.fit(x=data, epochs=10)
+    tf.keras.utils.plot_model(model, to_file="svd.png")
+
+
+if __name__ == "__main__":
+    app.run(main)

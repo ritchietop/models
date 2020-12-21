@@ -3,6 +3,7 @@ from tensorflow.python.feature_column.feature_column_lib import FeatureColumn, C
     CrossedColumn
 from tensorflow.python.feature_column.feature_column_v2 import FeatureTransformationCache, _StateManagerImplV2
 from typing import List
+from absl import app
 
 
 class Poly2Model(tf.keras.Model):
@@ -13,7 +14,7 @@ class Poly2Model(tf.keras.Model):
         self.l2_factor = l2_factor
         self.regularizer = tf.keras.regularizers.l2(l2_factor)
         self.cross_columns = sorted(cross_columns, key=lambda col: col.name)
-        self.state_manager = _StateManagerImplV2(self, True)
+        self.state_manager = _StateManagerImplV2(self, self.trainable)
         self.bias = None
 
     def build(self, input_shape):
@@ -51,6 +52,16 @@ class Poly2Model(tf.keras.Model):
         base_config = super(Poly2Model, self).get_config()
         return {**base_config, **config}
 
+    @staticmethod
+    def from_config(cls, config, custom_objects=None):
+        from tensorflow.python.feature_column.feature_column_lib import deserialize_feature_columns
+        config_cp = config.copy()
+        config_cp["columns"] = deserialize_feature_columns(config["columns"])
+        config_cp["cross_columns"] = deserialize_feature_columns(config["cross_columns"])
+        del config["columns"]
+        del config["cross_columns"]
+        return cls(config_cp, custom_objects=custom_objects)
+
     def call(self, inputs, training=None, mask=None):
         transformation_cache = FeatureTransformationCache(inputs)
         output_tensors = []
@@ -81,4 +92,51 @@ class Poly2Model(tf.keras.Model):
             output_tensors.append(output_tensor)
         logits_no_bias = tf.math.add_n(output_tensors)
         logits = tf.nn.bias_add(logits_no_bias, self.bias)
-        return logits
+        predict = tf.keras.activations.sigmoid(logits)
+        return predict
+
+
+def main(_):
+    import os
+    titanic_train_data_path = os.path.abspath(__file__).replace("models/rank/ml/poly2.py", "data/titanic/train.csv")
+
+    train_data = tf.data.experimental.make_csv_dataset(
+        file_pattern=titanic_train_data_path,
+        batch_size=10,
+        column_names=["PassengerId", "Survived", "Pclass", "Name", "Sex", "Age", "SibSp", "Parch", "Ticket", "Fare",
+                      "Cabin", "Embarked"],
+        column_defaults=[0, 0, "", "", 0.0, 0, 0, "", 0.0, "", ""],
+        label_name="Survived",
+        select_columns=["Survived", "Pclass", "Name", "Sex", "Age", "SibSp", "Parch", "Ticket", "Fare", "Cabin",
+                        "Embarked"],
+        field_delim=",",
+        use_quote_delim=True,
+        na_value="",
+        header=True,
+        num_epochs=1,
+        shuffle=True,
+        shuffle_buffer_size=1000,
+        num_rows_for_inference=0,
+        ignore_errors=False)
+
+    pclass_column = tf.feature_column.categorical_column_with_vocabulary_list(key="Pclass", vocabulary_list=[1, 2, 3])
+    sex_column = tf.feature_column.categorical_column_with_vocabulary_list(key="Sex",
+                                                                           vocabulary_list=["female", "male"])
+    age_column = tf.feature_column.bucketized_column(source_column=tf.feature_column.numeric_column(key="Age"),
+                                                     boundaries=[1, 6, 14, 18, 30, 40, 50, 60, 70])
+
+    feature_columns = [pclass_column, sex_column, age_column]
+
+    cross_feature_columns = [
+        tf.feature_column.crossed_column(keys=[sex_column, age_column], hash_bucket_size=100)
+    ]
+
+    model = Poly2Model(columns=feature_columns, cross_columns=cross_feature_columns, l2_factor=0.5)
+    model.compile(optimizer=tf.keras.optimizers.SGD(learning_rate=0.001),
+                  loss=tf.keras.losses.binary_crossentropy)
+    model.fit(x=train_data, epochs=10)
+    tf.keras.utils.plot_model(model, to_file="poly2.png")
+
+
+if __name__ == "__main__":
+    app.run(main)
