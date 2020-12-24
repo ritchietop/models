@@ -83,7 +83,7 @@ def main(_):
     movie_ratings_path = os.path.abspath(__file__).replace("models/rank/ml/svd.py", "data/movieLens/ml-1m/ratings.dat")
     data = tf.data.experimental.make_csv_dataset(
         file_pattern=movie_ratings_path,
-        batch_size=300,
+        batch_size=200,
         column_names=["user_id", "1", "item_id", "2", "rating", "3", "timestamp"],
         select_columns=["user_id", "item_id", "rating"],
         column_defaults=[0, 0, 0],
@@ -92,18 +92,17 @@ def main(_):
         use_quote_delim=False,
         header=False,
         num_epochs=1,
-        shuffle=False,
+        shuffle=True,
         shuffle_buffer_size=500)
 
     model = SVDModel(average_score=3.58, latent_dim=50,
                      user_column=tf.feature_column.categorical_column_with_identity(key="user_id", num_buckets=6041),
                      item_column=tf.feature_column.categorical_column_with_identity(key="item_id", num_buckets=4000),
                      l2_factor=0.5)
-    model.compile(optimizer=tf.keras.optimizers.SGD(learning_rate=0.0001),
+    model.compile(optimizer=tf.keras.optimizers.SGD(learning_rate=0.001),
                   loss=tf.keras.losses.mean_squared_error,
                   metrics=tf.keras.metrics.mean_squared_error)
-    model.fit(x=data, epochs=10)
-    tf.keras.utils.plot_model(model, to_file="svd.png")
+    model.fit(x=data, epochs=100, callbacks=[tf.keras.callbacks.TensorBoard(log_dir="./svd")])
 
 
 if __name__ == "__main__":

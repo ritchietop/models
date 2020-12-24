@@ -5,9 +5,9 @@ from typing import List
 from absl import app
 
 
-class LinearModel(tf.keras.Model):
-    def __init__(self, columns: List[FeatureColumn], l2_factor: float, name=None, **kwargs):
-        super(LinearModel, self).__init__(name=name, **kwargs)
+class LinearLayer(tf.keras.layers.Layer):
+    def __init__(self, columns: List[FeatureColumn], l2_factor: float, trainable=True, name=None, **kwargs):
+        super(LinearLayer, self).__init__(trainable=trainable, name=name, **kwargs)
         self.columns = sorted(columns, key=lambda col: col.name)
         self.l2_factor = l2_factor
         self.regularizer = tf.keras.regularizers.l2(l2_factor)
@@ -21,6 +21,8 @@ class LinearModel(tf.keras.Model):
                 first_dim = column.num_buckets
             elif isinstance(column, DenseColumn):
                 first_dim = column.variable_shape.num_elements()
+            else:
+                raise ValueError("Only support CategoricalColumn or DenseColumn. But get {}.".format(type(column)))
             self.state_manager.create_variable(
                 feature_column=column,
                 name="weights",
@@ -34,24 +36,7 @@ class LinearModel(tf.keras.Model):
             dtype=self.dtype,
             trainable=True)
 
-    def get_config(self):
-        from tensorflow.python.feature_column.feature_column_lib import serialize_feature_columns
-        config = {
-            "columns": serialize_feature_columns(self.columns),
-            "l2_factor": self.l2_factor
-        }
-        base_config = super(LinearModel, self).get_config()
-        return {**base_config, **config}
-
-    @staticmethod
-    def from_config(cls, config, custom_objects=None):
-        from tensorflow.python.feature_column.feature_column_lib import deserialize_feature_columns
-        config_cp = config.copy()
-        config_cp["columns"] = deserialize_feature_columns(config["columns"])
-        del config["columns"]
-        return cls(config_cp, custom_objects=custom_objects)
-
-    def call(self, inputs, training=None, mask=None):
+    def call(self, inputs, **kwargs):
         transformation_cache = FeatureTransformationCache(inputs)
         output_tensors = []
         for column in self.columns:
@@ -71,6 +56,33 @@ class LinearModel(tf.keras.Model):
                 output_tensors.append(output_tensor)
         logits_no_bias = tf.math.add_n(output_tensors)
         logits = tf.nn.bias_add(logits_no_bias, self.bias)
+        return logits
+
+
+class LinearModel(tf.keras.Model):
+    def __init__(self, columns: List[FeatureColumn], l2_factor: float, name=None, **kwargs):
+        super(LinearModel, self).__init__(name=name, **kwargs)
+        self.linear_layer = LinearLayer(columns=columns, l2_factor=l2_factor, trainable=True, name="LinearLayer")
+
+    def get_config(self):
+        from tensorflow.python.feature_column.feature_column_lib import serialize_feature_columns
+        config = {
+            "columns": serialize_feature_columns(self.columns),
+            "l2_factor": self.l2_factor
+        }
+        base_config = super(LinearModel, self).get_config()
+        return {**base_config, **config}
+
+    @classmethod
+    def from_config(cls, config, custom_objects=None):
+        from tensorflow.python.feature_column.feature_column_lib import deserialize_feature_columns
+        config_cp = config.copy()
+        config_cp["columns"] = deserialize_feature_columns(config["columns"])
+        del config["columns"]
+        return cls(**config_cp, custom_objects=custom_objects)
+
+    def call(self, inputs, training=None, mask=None):
+        logits = self.linear_layer(inputs)
         predict = tf.keras.activations.sigmoid(logits)
         return predict
 
@@ -108,8 +120,7 @@ def main(_):
     model = LinearModel(columns=feature_columns, l2_factor=0.5)
     model.compile(optimizer=tf.keras.optimizers.SGD(learning_rate=0.001),
                   loss=tf.keras.losses.binary_crossentropy)
-    model.fit(x=train_data, epochs=10)
-    tf.keras.utils.plot_model(model, to_file="lr.png")
+    model.fit(x=train_data, epochs=10, callbacks=[tf.keras.callbacks.TensorBoard()])
 
 
 if __name__ == "__main__":
