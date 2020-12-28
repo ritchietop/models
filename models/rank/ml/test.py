@@ -8,13 +8,13 @@ class SVDModel(tf.keras.Model):
     def __init__(self, latent_dim: int, user_column: CategoricalColumn,
                  item_column: CategoricalColumn, l2_factor: float, name=None, **kwargs):
         super(SVDModel, self).__init__(name=name, **kwargs)
-        self.average_score = None
         self.latent_dim = latent_dim
         self.user_column = user_column
         self.item_column = item_column
         self.l2_factor = l2_factor
         self.regularizer = tf.keras.regularizers.l2(l2_factor)
         self.state_manager = _StateManagerImplV2(self, self.trainable)
+        self.average_score = None
         self.user_bias = None
         self.item_bias = None
 
@@ -86,11 +86,11 @@ class SVDModel(tf.keras.Model):
 
 def main(_):
     import os
-    movie_ratings_path = os.path.abspath(__file__).replace("models/rank/ml/svd.py", "data/movieLens/ml-100k/u.data")
+    movie_ratings_path = os.path.abspath(__file__).replace("models/rank/ml/test.py", "data/movieLens/ml-100k/u.data")
     data = tf.data.experimental.make_csv_dataset(
         file_pattern=movie_ratings_path,
         batch_size=64,
-        column_names=["user_id", "item_id", "rating", "timestamp"],
+        column_names=["user_id",  "item_id",  "rating",  "timestamp"],
         select_columns=["user_id", "item_id", "rating"],
         column_defaults=[0, 0, 0.0],
         label_name="rating",
@@ -108,10 +108,10 @@ def main(_):
                      user_column=tf.feature_column.categorical_column_with_identity(key="user_id", num_buckets=10000),
                      item_column=tf.feature_column.categorical_column_with_identity(key="item_id", num_buckets=10000),
                      l2_factor=0)
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+    model.compile(optimizer='Adam',
                   loss=tf.keras.losses.mean_squared_error,
-                  metrics=tf.keras.metrics.mean_squared_error)
-    model.fit(x=data, epochs=100, callbacks=[tf.keras.callbacks.TensorBoard(log_dir="./svd")])
+                  metrics=tf.keras.metrics.RootMeanSquaredError())
+    model.fit(x=data, epochs=64, callbacks=[tf.keras.callbacks.TensorBoard(log_dir="./svd")])
 
 
 if __name__ == "__main__":

@@ -21,11 +21,33 @@ class EgesModel(tf.keras.Model):
                  target_id_column: CategoricalColumn,
                  name=None, **kwargs):
         super(EgesModel, self).__init__(name=name, **kwargs)
+        self.item_embedding_size = item_embedding_size
+        self.item_id_column = item_id_column
+        self.item_feature_columns = item_feature_columns
+        self.target_id_column = target_id_column
+        self.state_manager = _StateManagerImplV2(self, self.trainable)
 
-    def call(self, inputs, training=None, mask=None):
-        pass
+    def build(self, input_shape):
+        self.state_manager.create_variable(
+            self.item_id_column,
+            name="item_id_embeddings",
+            shape=(self.item_id_column.num_buckets, self.item_embedding_size),
+            dtype=tf.float32,
+            trainable=self.trainable)
+
 
     def get_config(self):
+        from tensorflow.python.feature_column.serialization import serialize_feature_columns, serialize_feature_column
+        config = {
+            "item_embedding_size": self.item_embedding_size,
+            "item_id_column": serialize_feature_column(self.item_id_column),
+            "item_feature_columns": serialize_feature_columns(self.item_feature_columns),
+            "target_id_column": serialize_feature_column(self.target_id_column)
+        }
+        base_config = super(EgesModel, self).get_config()
+        return {**base_config, **config}
+
+    def call(self, inputs, training=None, mask=None):
         pass
 
 
