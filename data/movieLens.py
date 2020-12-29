@@ -176,7 +176,83 @@ def gen_example(user_data, movie_id, movie_data, rating, user_history, timestamp
     return tf.train.Example(features=tf.train.Features(feature=features))
 
 
+def input_fn(file_pattern, batch_size, num_epochs, shuffle_buffer_size=None):
+    example_schema = {
+        "rating": tf.io.FixedLenFeature(shape=(1,), dtype=tf.float32, default_value=0),
+        "timestamp": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=0),
+        "movie_id": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=-1),
+        "gender": tf.io.FixedLenFeature(shape=(1,), dtype=tf.string, default_value=""),
+        "age": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=0),
+        "occupation": tf.io.FixedLenFeature(shape=(1,), dtype=tf.string, default_value=""),
+        "zip_code": tf.io.FixedLenFeature(shape=(1,), dtype=tf.string, default_value=""),
+        "keywords": tf.io.RaggedFeature(dtype=tf.string),
+        "publishYear": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=0),
+        "categories": tf.io.RaggedFeature(dtype=tf.string),
+        "user_history_high_score_movies": tf.io.RaggedFeature(dtype=tf.int64),
+        "user_history_low_score_movies": tf.io.RaggedFeature(dtype=tf.int64),
+        "user_history_high_score_movie_categories": tf.io.RaggedFeature(dtype=tf.string),
+        "user_history_low_score_movie_categories": tf.io.RaggedFeature(dtype=tf.string),
+        "user_history_high_score_movie_keywords": tf.io.RaggedFeature(dtype=tf.string),
+        "user_history_low_score_movie_keywords": tf.io.RaggedFeature(dtype=tf.string),
+    }
+    return tf.data.experimental.make_batched_features_dataset(
+        file_pattern=file_pattern,
+        batch_size=batch_size,
+        features=example_schema,
+        reader=tf.data.TFRecordDataset,
+        label_key="rating",
+        num_epochs=num_epochs,
+        shuffle=bool(shuffle_buffer_size),
+        shuffle_buffer_size=shuffle_buffer_size,
+        drop_final_batch=bool(shuffle_buffer_size))
+
+
+def train_input_fn(batch_size):
+    path = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/train.tfrecord")
+    return input_fn(path, batch_size, num_epochs=1, shuffle_buffer_size=batch_size * 10)
+
+
+def test_input_fn(batch_size):
+    path = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/test.tfrecord")
+    return input_fn(path, batch_size, num_epochs=1, shuffle_buffer_size=None)
+
+
+"""
+    timestamp = tf.keras.layers.Input(shape=(1,), name="timestamp", dtype=tf.int64)
+    movie_id = tf.keras.layers.Input(shape=(1,), name="movie_id", dtype=tf.int64)
+    gender = tf.keras.layers.Input(shape=(1,), name="gender", dtype=tf.string)
+    age = tf.keras.layers.Input(shape=(1,), name="age", dtype=tf.int64)
+    occupation = tf.keras.layers.Input(shape=(1,), name="occupation", dtype=tf.string)
+    zip_code = tf.keras.layers.Input(shape=(1,), name="zip_code", dtype=tf.string)
+    keywords = tf.keras.layers.Input(shape=(None,), name="keywords", dtype=tf.string, ragged=True)
+    publish_year = tf.keras.layers.Input(shape=(1,), name="publishYear", dtype=tf.int64)
+    categories = tf.keras.layers.Input(shape=(None,), name="categories", dtype=tf.string, ragged=True)
+    user_history_high_score_movies = tf.keras.layers.Input(
+        shape=(None,), name="user_history_high_score_movies", dtype=tf.int64, ragged=True)
+    user_history_low_score_movies = tf.keras.layers.Input(
+        shape=(None,), name="user_history_low_score_movies", dtype=tf.int64, ragged=True)
+    user_history_high_score_movie_categories = tf.keras.layers.Input(
+        shape=(None,), name="user_history_high_score_movie_categories", dtype=tf.string, ragged=True)
+    user_history_low_score_movie_categories = tf.keras.layers.Input(
+        shape=(None,), name="user_history_low_score_movie_categories", dtype=tf.string, ragged=True)
+    user_history_high_score_movie_keywords = tf.keras.layers.Input(
+        shape=(None,), name="user_history_high_score_movie_keywords", dtype=tf.string, ragged=True)
+    user_history_low_score_movie_keywords = tf.keras.layers.Input(
+        shape=(None,), name="user_history_low_score_movie_keywords", dtype=tf.string, ragged=True)
+"""
+
+
 if __name__ == "__main__":
-    train_output = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/train.tfrecord")
-    test_output = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/test.tfrecord")
-    gen_records(train_output, test_output, train_rate=0.8)
+    # train_file = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/train.tfrecord")
+    # test_file = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/test.tfrecord")
+    # gen_records(train_file, test_output, train_rate=0.8)
+    data_set = set()
+    for features, label in train_input_fn(batch_size=1000):
+        # print(features)
+        # print(label)
+        # break
+        for keyword in features["timestamp"].numpy():
+            for key in keyword:
+                data_set.add(key)
+    print(data_set)
+    print(len(data_set))
