@@ -179,7 +179,7 @@ def gen_example(user_id, user_data, movie_id, movie_data, rating, user_history, 
     return tf.train.Example(features=tf.train.Features(feature=features))
 
 
-def input_fn(file_pattern, batch_size, num_epochs, shuffle_buffer_size=None):
+def input_fn(file_pattern, batch_size, num_epochs, label_key, shuffle_buffer_size=None):
     example_schema = {
         "label": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=0),
         "rating": tf.io.FixedLenFeature(shape=(1,), dtype=tf.float32, default_value=0),
@@ -205,21 +205,21 @@ def input_fn(file_pattern, batch_size, num_epochs, shuffle_buffer_size=None):
         batch_size=batch_size,
         features=example_schema,
         reader=tf.data.TFRecordDataset,
-        label_key="rating",
+        label_key=label_key,
         num_epochs=num_epochs,
         shuffle=bool(shuffle_buffer_size),
         shuffle_buffer_size=shuffle_buffer_size,
         drop_final_batch=bool(shuffle_buffer_size))
 
 
-def train_input_fn(batch_size):
+def train_input_fn(batch_size, label_key="rating"):
     path = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/train.tfrecord")
-    return input_fn(path, batch_size, num_epochs=1, shuffle_buffer_size=batch_size * 10)
+    return input_fn(path, batch_size, num_epochs=1, label_key=label_key, shuffle_buffer_size=batch_size * 10)
 
 
-def test_input_fn(batch_size):
+def test_input_fn(batch_size, label_key="rating"):
     path = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/test.tfrecord")
-    return input_fn(path, batch_size, num_epochs=1, shuffle_buffer_size=None)
+    return input_fn(path, batch_size, num_epochs=1, label_key=label_key, shuffle_buffer_size=None)
 
 
 """
