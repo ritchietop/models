@@ -55,25 +55,14 @@ def linear_model(output_dim):
 
 
 def main(_):
-    # model = linear_model(output_dim=1)
-    train_data = train_input_fn(batch_size=3)
-    # validate_data = test_input_fn(batch_size=1000)
-    # model.compile(optimizer=tf.keras.optimizers.SGD(learning_rate=0.001),
-    #               loss=tf.keras.losses.mean_squared_error,
-    #               metrics=tf.keras.metrics.RootMeanSquaredError())
-    # model.fit(x=train_data, validation_data=validate_data, epochs=3)
-    # tf.keras.utils.plot_model(model, to_file="./lr.png", rankdir="BT")
-    keywords = tf.keras.layers.Input(shape=(None,), name="keywords", dtype=tf.string, ragged=True)
-    keywords_hash_layer = tf.keras.layers.experimental.preprocessing.Hashing(num_bins=10000)
-    keywords_layer = tf.keras.layers.experimental.preprocessing.CategoryEncoding(max_tokens=10000)
-    for features, _ in train_data:
-        #print(keywords(features))
-        index = keywords_hash_layer(features["keywords"])
-        print(dir(index))
-        print(index)
-        print(index.row_splits)
-        # print(keywords_layer(index))
-        break
+    model = linear_model(output_dim=1)
+    train_data = train_input_fn(batch_size=500)
+    validate_data = test_input_fn(batch_size=1000)
+    model.compile(optimizer=tf.keras.optimizers.SGD(learning_rate=0.001),
+                  loss=tf.keras.losses.mean_squared_error,
+                  metrics=tf.keras.metrics.RootMeanSquaredError())
+    model.fit(x=train_data, validation_data=validate_data, epochs=2)
+    tf.keras.utils.plot_model(model, to_file="./lr.png", rankdir="BT")
 
 
 if __name__ == "__main__":
