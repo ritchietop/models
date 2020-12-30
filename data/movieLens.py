@@ -131,6 +131,7 @@ def gen_records(train_output, test_output, train_rate=0.8):
 
 def gen_example(user_data, movie_id, movie_data, rating, user_history, timestamp):
     features = {
+        "label": tf.train.Feature(int64_list=tf.train.Int64List(value=[1 if rating >= 3 else 0])),
         "rating": tf.train.Feature(float_list=tf.train.FloatList(value=[rating])),
         "timestamp": tf.train.Feature(int64_list=tf.train.Int64List(value=[timestamp])),
         "movie_id": tf.train.Feature(int64_list=tf.train.Int64List(value=[movie_id])),
@@ -178,6 +179,7 @@ def gen_example(user_data, movie_id, movie_data, rating, user_history, timestamp
 
 def input_fn(file_pattern, batch_size, num_epochs, shuffle_buffer_size=None):
     example_schema = {
+        "label": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=0),
         "rating": tf.io.FixedLenFeature(shape=(1,), dtype=tf.float32, default_value=0),
         "timestamp": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=0),
         "movie_id": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=-1),
@@ -243,16 +245,6 @@ def test_input_fn(batch_size):
 
 
 if __name__ == "__main__":
-    # train_file = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/train.tfrecord")
-    # test_file = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/test.tfrecord")
-    # gen_records(train_file, test_output, train_rate=0.8)
-    data_set = set()
-    for features, label in train_input_fn(batch_size=1000):
-        # print(features)
-        # print(label)
-        # break
-        for keyword in features["timestamp"].numpy():
-            for key in keyword:
-                data_set.add(key)
-    print(data_set)
-    print(len(data_set))
+    train_file = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/train.tfrecord")
+    test_file = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/test.tfrecord")
+    gen_records(train_file, test_file, train_rate=0.8)
