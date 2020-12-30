@@ -103,7 +103,8 @@ def gen_records(train_output, test_output, train_rate=0.8):
         behavior_count = 0
         for movie_id, rating_info in user_behaviors:
             rating, timestamp = rating_info["rating"], rating_info["timestamp"]
-            example = gen_example(users[user_id], movie_id, movies[movie_id], rating, user_history_data, timestamp)
+            example = gen_example(user_id, users[user_id], movie_id, movies[movie_id], rating, user_history_data,
+                                  timestamp)
             if behavior_count <= train_behavior_count:
                 train_file.write(example.SerializeToString())
             else:
@@ -129,11 +130,12 @@ def gen_records(train_output, test_output, train_rate=0.8):
     test_file.close()
 
 
-def gen_example(user_data, movie_id, movie_data, rating, user_history, timestamp):
+def gen_example(user_id, user_data, movie_id, movie_data, rating, user_history, timestamp):
     features = {
         "label": tf.train.Feature(int64_list=tf.train.Int64List(value=[1 if rating >= 3 else 0])),
         "rating": tf.train.Feature(float_list=tf.train.FloatList(value=[rating])),
         "timestamp": tf.train.Feature(int64_list=tf.train.Int64List(value=[timestamp])),
+        "user_id": tf.train.Feature(int64_list=tf.train.Int64List(value=[user_id])),
         "movie_id": tf.train.Feature(int64_list=tf.train.Int64List(value=[movie_id])),
     }
     if "gender" in user_data:
@@ -182,6 +184,7 @@ def input_fn(file_pattern, batch_size, num_epochs, shuffle_buffer_size=None):
         "label": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=0),
         "rating": tf.io.FixedLenFeature(shape=(1,), dtype=tf.float32, default_value=0),
         "timestamp": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=0),
+        "user_id": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=-1),
         "movie_id": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=-1),
         "gender": tf.io.FixedLenFeature(shape=(1,), dtype=tf.string, default_value=""),
         "age": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=0),
@@ -221,6 +224,7 @@ def test_input_fn(batch_size):
 
 """
     timestamp = tf.keras.layers.Input(shape=(1,), name="timestamp", dtype=tf.int64)
+    user_id = tf.keras.layers.Input(shape=(1,), name="user_id", dtype=tf.int64)
     movie_id = tf.keras.layers.Input(shape=(1,), name="movie_id", dtype=tf.int64)
     gender = tf.keras.layers.Input(shape=(1,), name="gender", dtype=tf.string)
     age = tf.keras.layers.Input(shape=(1,), name="age", dtype=tf.int64)
