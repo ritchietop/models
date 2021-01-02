@@ -25,29 +25,30 @@ def youtube_net_model(embedding_size,
     user_history_low_score_movies = tf.keras.layers.Input(
         shape=(None,), name="user_history_low_score_movies", dtype=tf.int64, ragged=True)
 
-    movie_id_embedding_layer = tf.keras.layers.Embedding(input_dim=movie_id_size, output_dim=embedding_size)
+    movie_id_embedding_layer = tf.keras.layers.Embedding(input_dim=movie_id_size, output_dim=embedding_size,
+                                                         name="MovieIdEmbedding")
 
     # user input features
     gender_layer = tf.keras.layers.experimental.preprocessing.CategoryEncoding(max_tokens=2, output_mode="binary")(
         tf.keras.layers.experimental.preprocessing.StringLookup(vocabulary=["F", "M"], num_oov_indices=0,
                                                                 mask_token=None)(gender))
     age_layer = tf.keras.layers.Flatten()(
-        tf.keras.layers.Embedding(input_dim=8, output_dim=3)(
+        tf.keras.layers.Embedding(input_dim=8, output_dim=3, name="AgeEmbedding")(
             tf.keras.layers.experimental.preprocessing.IntegerLookup(
                 vocabulary=[1, 18, 25, 35, 45, 50, 56], mask_value=None)(age)))
     occupation_layer = tf.keras.layers.Flatten()(
-        tf.keras.layers.Embedding(input_dim=22, output_dim=5)(
+        tf.keras.layers.Embedding(input_dim=22, output_dim=5, name="OccupationEmbedding")(
             tf.keras.layers.experimental.preprocessing.StringLookup(
                 vocabulary=list(user_occupation.values()), mask_token=None)(occupation)))
     zip_code_layer = tf.keras.layers.Flatten()(
-            tf.keras.layers.Embedding(input_dim=10000, output_dim=13)(
-            tf.keras.layers.experimental.preprocessing.Hashing(num_bins=10000)(zip_code)))
+            tf.keras.layers.Embedding(input_dim=10000, output_dim=13, name="ZipCodeEmbedding")(
+                tf.keras.layers.experimental.preprocessing.Hashing(num_bins=10000)(zip_code)))
     user_history_high_score_movies_layer = tf.keras.layers.Lambda(
-        function=lambda tensor: tf.math.reduce_mean(tensor, axis=1))(
-        movie_id_embedding_layer(user_history_high_score_movies))
+        function=lambda tensor: tf.math.reduce_sum(tensor, axis=1), name="UserHistoryHighScoreMovieReduceSum")(
+            movie_id_embedding_layer(user_history_high_score_movies))
     user_history_low_score_movies_layer = tf.keras.layers.Lambda(
-        function=lambda tensor: tf.math.reduce_mean(tensor, axis=1))(
-        movie_id_embedding_layer(user_history_low_score_movies))
+        function=lambda tensor: tf.math.reduce_sum(tensor, axis=1), name="UserHistoryLowScoreMovieReduceSum")(
+            movie_id_embedding_layer(user_history_low_score_movies))
 
     user_layer = tf.keras.layers.Concatenate()(inputs=[
         gender_layer, age_layer, occupation_layer, zip_code_layer, user_history_high_score_movies_layer,
@@ -62,8 +63,7 @@ def youtube_net_model(embedding_size,
 
     model = tf.keras.models.Model(inputs=[
         movie_id, gender, age, occupation, zip_code, user_history_high_score_movies, user_history_low_score_movies
-    ], outputs=[loss, gender_layer, age_layer, occupation_layer, zip_code_layer, user_history_high_score_movies_layer,
-        user_history_low_score_movies_layer])
+    ], outputs=[loss])
 
     return model
 
@@ -106,18 +106,13 @@ class CandidateSampledLossLayer(tf.keras.layers.Layer):
 
 def main(_):
     model = youtube_net_model(embedding_size=128, hidden_units=[256, 256, 128], dropout=0.5)
-    train_data = train_input_fn(batch_size=10, label_key="label")
+    train_data = train_input_fn(batch_size=500, label_key="label")
     validate_data = test_input_fn(batch_size=1000, label_key="label")
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
                   loss=tf.keras.losses.mean_squared_error,
-                  metrics=tf.keras.metrics.AUC(), run_eagerly=True)
-    # model.fit(x=train_data, validation_data=validate_data, epochs=2)
-    # tf.keras.utils.plot_model(model, to_file="./youtube_net.png", rankdir="BT")
-    for data, label in train_data:
-        print(data)
-        print(model(data))
-        print(label)
-        break
+                  metrics=tf.keras.metrics.RootMeanSquaredError())
+    model.fit(x=train_data, validation_data=validate_data, epochs=1)
+    tf.keras.utils.plot_model(model, to_file="./youtube_net.png", rankdir="BT")
 
 
 if __name__ == "__main__":
