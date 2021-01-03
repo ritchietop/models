@@ -1,6 +1,7 @@
 import tensorflow as tf
 import os
 from collections import defaultdict
+import random
 
 
 user_occupation = {
@@ -87,8 +88,8 @@ def gen_records(train_output, test_output, train_rate=0.8):
     users = load_user_data()
     movies = load_movie_data()
     ratings = load_rating_data()
-    train_file = tf.io.TFRecordWriter(train_output)
-    test_file = tf.io.TFRecordWriter(test_output)
+    train_records = []
+    test_f = tf.io.TFRecordWriter(test_output)
     for user_id in ratings:
         user_behaviors = sorted(list(ratings[user_id].items()), key=lambda item: item[1]["timestamp"])
         user_history_data = {
@@ -106,9 +107,9 @@ def gen_records(train_output, test_output, train_rate=0.8):
             example = gen_example(user_id, users[user_id], movie_id, movies[movie_id], rating, user_history_data,
                                   timestamp)
             if behavior_count <= train_behavior_count:
-                train_file.write(example.SerializeToString())
+                train_records.append(example.SerializeToString())
             else:
-                test_file.write(example.SerializeToString())
+                test_f.write(example.SerializeToString())
             behavior_count += 1
             if rating >= 3:
                 user_history_data["user_history_high_score_movies"].append(movie_id)
@@ -126,8 +127,11 @@ def gen_records(train_output, test_output, train_rate=0.8):
                 if "keywords" in movies[movie_id]:
                     for keyword in movies[movie_id]["keywords"]:
                         user_history_data["user_history_low_score_movie_keywords"].append(keyword)
-    train_file.close()
-    test_file.close()
+    test_f.close()
+    with tf.io.TFRecordWriter(train_output) as f:
+        random.shuffle(train_records)
+        for record in train_records:
+            f.write(record)
 
 
 def gen_example(user_id, user_data, movie_id, movie_data, rating, user_history, timestamp):

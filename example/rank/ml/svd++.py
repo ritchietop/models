@@ -1,85 +1,107 @@
 import tensorflow as tf
 from absl import app
-import os
+from data.movieLens import train_input_fn, test_input_fn
 
 
-def svd_plus_plus_model(average_score, embedding_size, l2_factor, user_id_size, item_id_size):
-    user_id_input = tf.keras.layers.Input(shape=(1,), name="user_id", dtype=tf.int32)
-    item_id_input = tf.keras.layers.Input(shape=(1,), name="item_id", dtype=tf.int32)
-    user_history_click_item_id_input = tf.keras.layers.Input(shape=(None,), name="user_history_click_item_id",
-                                                             dtype=tf.int32, sparse=True)
-    user_history_like_item_id_input = tf.keras.layers.Input(shape=(None,), name="user_history_like_item_id",
-                                                            dtype=tf.int32, sparse=True)
+def svd_plus_plus_model(average_score, embedding_size, l2_factor, user_id_size=6041, item_id_size=3953):
+    user_id = tf.keras.layers.Input(shape=(1,), name="user_id", dtype=tf.int64)
+    movie_id = tf.keras.layers.Input(shape=(1,), name="movie_id", dtype=tf.int64)
+    user_history_high_score_movies = tf.keras.layers.Input(
+        shape=(None,), name="user_history_high_score_movies", dtype=tf.int64, ragged=True)
+    user_history_low_score_movies = tf.keras.layers.Input(
+        shape=(None,), name="user_history_low_score_movies", dtype=tf.int64, ragged=True)
 
-    user_history_click_item_id_input_layer = tf.keras.layers.experimental.preprocessing.IntegerLookup(
-        vocabulary=list(range(item_id_size)), mask_value=None)(user_history_click_item_id_input)
-    user_history_like_item_id_input_layer = tf.keras.layers.experimental.preprocessing.IntegerLookup(
-        vocabulary=list(range(item_id_size)), mask_value=None)(user_history_like_item_id_input)
+    user_id_embedding_input = tf.keras.layers.Flatten()(
+        tf.keras.layers.Embedding(
+            input_dim=user_id_size, output_dim=embedding_size,
+            embeddings_regularizer=tf.keras.regularizers.l2(l2_factor))(user_id))
+    user_history_high_score_movies_input = tf.keras.layers.Lambda(
+        function=lambda tensor: user_history_movies_pooling(tensor))(
+        tf.keras.layers.Embedding(
+            input_dim=item_id_size, output_dim=embedding_size,
+            embeddings_regularizer=tf.keras.regularizers.l2(l2_factor))(user_history_high_score_movies))
+    user_history_low_score_movies_input = tf.keras.layers.Lambda(
+        function=lambda tensor: user_history_movies_pooling(tensor))(
+        tf.keras.layers.Embedding(
+            input_dim=item_id_size, output_dim=embedding_size,
+            embeddings_regularizer=tf.keras.regularizers.l2(l2_factor))(user_history_low_score_movies))
+    user_embedding_input = tf.keras.layers.Add()(inputs=[
+        user_id_embedding_input, user_history_high_score_movies_input, user_history_low_score_movies_input
+    ])
 
-    user_id_embedding_input_layer = tf.keras.layers.Embedding(
-        input_dim=user_id_size, output_dim=embedding_size, embeddings_regularizer=tf.keras.regularizers.l2(l2_factor),
-        name="UserIdEmbeddingLayer")(user_id_input)
-    user_bias_input_layer = tf.keras.layers.Embedding(
-        input_dim=user_id_size, output_dim=1, embeddings_regularizer=tf.keras.regularizers.l2(l2_factor),
-        name="UserBiasLayer")(user_id_input)
-    item_id_embedding_input_layer = tf.keras.layers.Embedding(
-        input_dim=item_id_size, output_dim=embedding_size, embeddings_regularizer=tf.keras.regularizers.l2(l2_factor),
-        name="ItemIdEmbeddingLayer")(item_id_input)
-    item_bias_input_layer = tf.keras.layers.Embedding(
-        input_dim=item_id_size, output_dim=1, embeddings_regularizer=tf.keras.regularizers.l2(l2_factor),
-        name="ItemBiasLayer")(item_id_input)
-    user_history_click_item_id_input_layer = tf.keras.layers.Embedding(
-        input_dim=item_id_size, output_dim=embedding_size, embeddings_regularizer=tf.keras.regularizers.l2(l2_factor),
-        name="UserHistoryClickItemIdLayer")(user_history_click_item_id_input_layer)
-    user_history_like_item_id_input_layer = tf.keras.layers.Embedding(
-        input_dim=item_id_size, output_dim=embedding_size, embeddings_regularizer=tf.keras.regularizers.l2(l2_factor),
-        name="UserHistoryLikeItemLayer")(user_history_like_item_id_input_layer)
+    movie_id_embedding_input = tf.keras.layers.Flatten()(
+        tf.keras.layers.Embedding(
+            input_dim=item_id_size, output_dim=embedding_size,
+            embeddings_regularizer=tf.keras.regularizers.l2(l2_factor))(movie_id))
 
-    user_embedding_input_layer = tf.keras.layers.Add()([user_id_embedding_input_layer,
-                                                        user_history_click_item_id_input_layer,
-                                                        user_history_like_item_id_input_layer])
+    predict_score = tf.keras.layers.Dot(axes=-1)(inputs=[user_embedding_input, movie_id_embedding_input])
+    predict_bias = AddBiasLayer(global_average_score=average_score, user_id_size=user_id_size,
+                                item_id_size=item_id_size, l2_factor=l2_factor)([user_id, movie_id])
+    predict = tf.keras.layers.Add()(inputs=[predict_score, predict_bias])
 
-    predict_no_bias = tf.keras.layers.Dot(axes=-1)([user_embedding_input_layer, item_id_embedding_input_layer])
-
-    predict = tf.keras.layers.Add()([user_bias_input_layer, item_bias_input_layer, predict_no_bias])
-
-    predict = tf.keras.layers.Lambda(function=lambda tensor: tf.nn.bias_add(tf.squeeze(tensor, axis=1),
-                                                                            tf.constant(value=[average_score])),
-                                     name="AddAverageScoreLayer")(predict)
-
-    model = tf.keras.Model(inputs=[user_id_input, item_id_input], outputs=[predict])
+    model = tf.keras.Model(inputs=[user_id, movie_id, user_history_high_score_movies, user_history_low_score_movies],
+                           outputs=[predict])
     return model
 
 
-def input_fn(path, batch_size, num_epochs=1, shuffle_buffer_size=None):
-    return tf.data.experimental.make_csv_dataset(
-        file_pattern=path,
-        batch_size=batch_size,
-        column_names=["user_id", "empty1", "item_id", "empty2", "rating", "empty3", "timestamp"],
-        select_columns=["user_id", "item_id", "rating"],
-        column_defaults=[0, 0, 0.0],
-        label_name="rating",
-        field_delim=":",
-        use_quote_delim=True,
-        na_value="null",
-        header=False,
-        num_epochs=num_epochs,
-        shuffle=bool(shuffle_buffer_size),
-        shuffle_buffer_size=shuffle_buffer_size,
-        num_rows_for_inference=0,
-        ignore_errors=False)
+def user_history_movies_pooling(tensor: tf.RaggedTensor, combiner: str = "sqrtn"):
+    tensor_sum = tf.math.reduce_sum(tensor, axis=1)
+    if combiner == "sum":
+        return tensor_sum
+    row_lengths = tf.expand_dims(tensor.row_lengths(axis=1), axis=1)
+    row_lengths = tf.math.maximum(tf.ones_like(row_lengths), row_lengths)
+    row_lengths = tf.cast(row_lengths, dtype=tf.float32)
+    if combiner == "mean":
+        return tensor_sum / row_lengths
+    if combiner == "sqrtn":
+        return tensor_sum / tf.math.sqrt(row_lengths)
+
+
+class AddBiasLayer(tf.keras.layers.Layer):
+    def __init__(self,
+                 global_average_score: float,
+                 user_id_size: int,
+                 item_id_size: int,
+                 l2_factor: float,
+                 trainable=True,
+                 name=None,
+                 **kwargs):
+        super(AddBiasLayer, self).__init__(trainable=trainable, name=name, **kwargs)
+        self.global_average_score = global_average_score
+        self.user_bias_score = None
+        self.item_bias_score = None
+        self.user_id_size = user_id_size
+        self.item_id_size = item_id_size
+        self.l2_factor = l2_factor
+
+    def build(self, input_shape):
+        self.user_bias_score = self.add_weight(
+            name="user_bias_score",
+            shape=(self.user_id_size,),
+            dtype=self.dtype,
+            regularizer=tf.keras.regularizers.l2(self.l2_factor))
+        self.item_bias_score = self.add_weight(
+            name="item_bias_score",
+            shape=(self.item_id_size,),
+            dtype=self.dtype,
+            regularizer=tf.keras.regularizers.l2(self.l2_factor))
+
+    def call(self, inputs, **kwargs):
+        user_id, item_id = inputs
+        user_bias = tf.nn.embedding_lookup(self.user_bias_score, user_id)
+        item_bias = tf.nn.embedding_lookup(self.item_bias_score, item_id)
+        return self.global_average_score + user_bias + item_bias
 
 
 def main(_):
-    model = svd_plus_plus_model(average_score=3.5, embedding_size=200, l2_factor=0.5, user_id_size=6040,
-                                item_id_size=4000)
-    data_path = os.path.abspath(__file__).replace("example/rank/ml/svd++.py", "data/movieLens/ml-1m/ratings.dat")
-    train_data = input_fn(data_path, batch_size=500, shuffle_buffer_size=1000)
-    model.compile(optimizer=tf.keras.optimizers.SGD(learning_rate=0.01),
+    model = svd_plus_plus_model(average_score=3.5, embedding_size=5, l2_factor=0.5)
+    train_data = train_input_fn(batch_size=500)
+    validate_data = test_input_fn(batch_size=1000)
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), run_eagerly=True,
                   loss=tf.keras.losses.mean_squared_error,
                   metrics=tf.keras.metrics.RootMeanSquaredError())
-    model.fit(x=train_data, epochs=5)
-    tf.keras.utils.plot_model(model, to_file="./svd++.png")
+    model.fit(x=train_data, validation_data=validate_data, epochs=1)
+    tf.keras.utils.plot_model(model, to_file="./svd++.png", rankdir="BT")
 
 
 if __name__ == "__main__":
