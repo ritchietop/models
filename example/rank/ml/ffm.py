@@ -60,29 +60,12 @@ def fmm_model(embedding_size):
     lr_input_layer = tf.keras.layers.Dense(units=1)(lr_input_layer)
 
     # fmm
-    timestamp_hour_fm_layer = tf.keras.layers.Embedding(input_dim=24, output_dim=embedding_size)(timestamp_hour_layer)
-    timestamp_week_fm_layer = tf.keras.layers.Embedding(input_dim=7, output_dim=embedding_size)(timestamp_week_layer)
-    gender_fm_layer = tf.keras.layers.Embedding(input_dim=2, output_dim=embedding_size)(gender_layer)
-    age_fm_layer = tf.keras.layers.Embedding(input_dim=7, output_dim=embedding_size)(age_layer)
-    occupation_fm_layer = tf.keras.layers.Embedding(input_dim=21, output_dim=embedding_size)(occupation_layer)
-    # 3439
-    zip_code_fm_layer = tf.keras.layers.Embedding(input_dim=10000, output_dim=embedding_size)(zip_code_layer)
-    # 4862
-    keywords_fm_layer = tf.keras.layers.Embedding(input_dim=10000, output_dim=embedding_size)(keywords_layer)
-    # 1919 ~ 2000
-    publish_year_fm_layer = tf.keras.layers.Embedding(input_dim=82, output_dim=embedding_size)(publish_year_layer)
-    categories_fm_layer = tf.keras.layers.Embedding(input_dim=18, output_dim=embedding_size)(categories_layer)
-
-    all_fm_embeddings_layer = tf.keras.layers.Concatenate(axis=1)(inputs=[
-        timestamp_hour_fm_layer, timestamp_week_fm_layer,
-        gender_fm_layer,
-        age_fm_layer, occupation_fm_layer,
-        zip_code_fm_layer, keywords_fm_layer, publish_year_fm_layer, categories_fm_layer
+    fmm_input_layer = FMMCrossLayer(embedding_size=embedding_size)(inputs=[
+        timestamp_hour_layer, timestamp_week_layer, gender_layer, age_layer, occupation_layer, zip_code_layer,
+        keywords_layer, publish_year_layer, categories_layer
     ])
 
-    fm_input_layer = tf.keras.layers.Lambda(function=fm_cross, name="FmCrossLayer")(all_fm_embeddings_layer)
-
-    predict = tf.keras.layers.Add()(inputs=[lr_input_layer, fm_input_layer])
+    predict = tf.keras.layers.Add()(inputs=[lr_input_layer, fmm_input_layer])
 
     model = tf.keras.models.Model(inputs=[
         timestamp, gender, age, occupation, zip_code, keywords, publish_year, categories
@@ -92,7 +75,14 @@ def fmm_model(embedding_size):
 
 
 class FMMCrossLayer(tf.keras.layers.Layer):
-    def __init__(self, ):
+    def __init__(self, embedding_size: int, trainable=True, name=None, **kwargs):
+        super(FMMCrossLayer, self).__init__(trainable=trainable, name=name, **kwargs)
+        self.embedding_size = embedding_size
+
+    def build(self, input_shape):
+        pass
+
+    def call(self, inputs, **kwargs):
         pass
 
 

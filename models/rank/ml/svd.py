@@ -82,37 +82,3 @@ class SVDModel(tf.keras.Model):
         self.add_loss(self.regularizer(self.item_bias))
         score = tf.nn.bias_add(score_no_bias + user_bias + item_bias, self.average_score)
         return score_no_bias + user_bias + item_bias
-
-
-def main(_):
-    import os
-    movie_ratings_path = os.path.abspath(__file__).replace("models/rank/ml/svd.py", "data/movieLens/ml-100k/u.data")
-    data = tf.data.experimental.make_csv_dataset(
-        file_pattern=movie_ratings_path,
-        batch_size=64,
-        column_names=["user_id", "item_id", "rating", "timestamp"],
-        select_columns=["user_id", "item_id", "rating"],
-        column_defaults=[0, 0, 0.0],
-        label_name="rating",
-        field_delim="\t",
-        use_quote_delim=True,
-        na_value="null",
-        header=False,
-        num_epochs=1,
-        shuffle=bool(100),
-        shuffle_buffer_size=100,
-        num_rows_for_inference=0,
-        ignore_errors=False)
-
-    model = SVDModel(latent_dim=5,
-                     user_column=tf.feature_column.categorical_column_with_identity(key="user_id", num_buckets=10000),
-                     item_column=tf.feature_column.categorical_column_with_identity(key="item_id", num_buckets=10000),
-                     l2_factor=0)
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
-                  loss=tf.keras.losses.mean_squared_error,
-                  metrics=tf.keras.metrics.mean_squared_error)
-    model.fit(x=data, epochs=100, callbacks=[tf.keras.callbacks.TensorBoard(log_dir="./svd")])
-
-
-if __name__ == "__main__":
-    app.run(main)
