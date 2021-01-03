@@ -57,7 +57,7 @@ def fm_model(embedding_size):
         timestamp_hour_lr_layer, timestamp_week_lr_layer, gender_lr_layer, age_lr_layer, occupation_lr_layer,
         zip_code_lr_layer, keywords_lr_layer, publish_year_lr_layer, categories_lr_layer
     ])
-    lr_input_layer = tf.keras.layers.Dense(units=1)(lr_input_layer)
+    lr_input_layer = tf.keras.layers.Dense(units=1, name="LinearLayer")(lr_input_layer)
 
     # fm
     timestamp_hour_fm_layer = tf.keras.layers.Embedding(input_dim=24, output_dim=embedding_size)(timestamp_hour_layer)
@@ -83,6 +83,7 @@ def fm_model(embedding_size):
     fm_input_layer = tf.keras.layers.Lambda(function=fm_cross, name="FmCrossLayer")(all_fm_embeddings_layer)
 
     predict = tf.keras.layers.Add()(inputs=[lr_input_layer, fm_input_layer])
+    predict = tf.keras.layers.Lambda(function=lambda tensor: tf.nn.sigmoid(tensor), name="Sigmoid")(predict)
 
     model = tf.keras.models.Model(inputs=[
         timestamp, gender, age, occupation, zip_code, keywords, publish_year, categories
