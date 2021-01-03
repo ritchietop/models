@@ -61,7 +61,7 @@ def main(_):
     model.compile(optimizer=tf.keras.optimizers.SGD(learning_rate=0.001),
                   loss=tf.keras.losses.mean_squared_error,
                   metrics=tf.keras.metrics.RootMeanSquaredError())
-    model.fit(x=train_data, validation_data=validate_data, epochs=2)
+    model.fit(x=train_data, validation_data=validate_data, epochs=1)
     tf.keras.utils.plot_model(model, to_file="./lr.png", rankdir="BT")
 
 
