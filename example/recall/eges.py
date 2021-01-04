@@ -3,8 +3,8 @@ from absl import app
 from data.movieLens_graph import input_fn
 
 
-def eges_model(embedding_size, num_sampled=10, num_true=4, item_id_size=3953):
-    target_movie_ids = tf.keras.layers.Input(shape=(num_true,), name="target_movie_ids", dtype=tf.int64)
+def eges_model(embedding_size, num_sampled=10, item_id_size=3953):
+    target_movie_id = tf.keras.layers.Input(shape=(1,), name="target_movie_id", dtype=tf.int64)
     movie_id = tf.keras.layers.Input(shape=(1,), name="movie_id", dtype=tf.int64)
     keywords = tf.keras.layers.Input(shape=(None,), name="keywords", dtype=tf.string, ragged=True)
     publish_year = tf.keras.layers.Input(shape=(1,), name="publishYear", dtype=tf.int64)
@@ -40,10 +40,10 @@ def eges_model(embedding_size, num_sampled=10, num_true=4, item_id_size=3953):
         function=weighted_movie_embedding, name="WeightedMovieEmbeddingLayer")(
             inputs=[movie_embedding_normalize_weight_layer, movie_embedding_layer])
 
-    loss = CandidateSampledLossLayer(item_id_size=item_id_size, embedding_size=embedding_size, num_sampled=num_sampled,
-                                     num_true=num_true)(inputs=[weighted_movie_embedding_layer, target_movie_ids])
+    loss = CandidateSampledLossLayer(item_id_size=item_id_size, embedding_size=embedding_size, num_sampled=num_sampled)(
+        inputs=[weighted_movie_embedding_layer, target_movie_id])
 
-    model = tf.keras.Model(inputs=[target_movie_ids, movie_id, keywords, publish_year, categories], outputs=loss)
+    model = tf.keras.Model(inputs=[target_movie_id, movie_id, keywords, publish_year, categories], outputs=loss)
 
     return model
 
@@ -107,12 +107,12 @@ class CandidateSampledLossLayer(tf.keras.layers.Layer):
 
 
 def main(_):
-    model = eges_model(embedding_size=128)
+    model = eges_model(embedding_size=128, num_sampled=10)
     train_data = input_fn(batch_size=500, shuffle_buffer_size=1000)
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
                   loss=tf.keras.losses.mean_squared_error,
                   metrics=tf.keras.metrics.RootMeanSquaredError())
-    model.fit(x=train_data, epochs=10)
+    model.fit(x=train_data, epochs=1)
     tf.keras.utils.plot_model(model, to_file="./eges.png", rankdir="BT")
 
 

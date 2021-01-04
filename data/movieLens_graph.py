@@ -101,18 +101,19 @@ def generate_train_data(output_file, window_size, num_walks, walk_length, p, q, 
                 if "categories" in movie_data[walk[i]]:
                     feature["categories"] = tf.train.Feature(bytes_list=tf.train.BytesList(
                         value=list(map(lambda x: x.encode("utf-8"), movie_data[walk[i]]["categories"]))))
-            feature["target_movie_ids"] = tf.train.Feature(int64_list=tf.train.Int64List(value=neighbors))
-            example = tf.train.Example(features=tf.train.Features(feature=feature)).SerializeToString()
-            records.append(example)
+            for neighbor in neighbors:
+                feature["target_movie_id"] = tf.train.Feature(int64_list=tf.train.Int64List(value=[neighbor]))
+                example = tf.train.Example(features=tf.train.Features(feature=feature)).SerializeToString()
+                records.append(example)
     random.shuffle(records)
     with tf.io.TFRecordWriter(output_file) as f:
         for record in records:
             f.write(record)
 
 
-def input_fn(batch_size, target_size=4, shuffle_buffer_size=None):
+def input_fn(batch_size, shuffle_buffer_size=None):
     example_schema = {
-        "target_movie_ids": tf.io.FixedLenFeature(shape=(target_size,), dtype=tf.int64),
+        "target_movie_id": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64),
         "movie_id": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64),
         "keywords": tf.io.RaggedFeature(dtype=tf.string, row_splits_dtype=tf.int64),
         "publishYear": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=0),
