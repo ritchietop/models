@@ -110,6 +110,28 @@ def generate_train_data(output_file, window_size, num_walks, walk_length, p, q, 
             f.write(record)
 
 
+def input_fn(batch_size, target_size=4, shuffle_buffer_size=None):
+    example_schema = {
+        "target_movie_ids": tf.io.FixedLenFeature(shape=(target_size,), dtype=tf.int64),
+        "movie_id": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64),
+        "keywords": tf.io.RaggedFeature(dtype=tf.string, row_splits_dtype=tf.int64),
+        "publishYear": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=0),
+        "categories": tf.io.RaggedFeature(dtype=tf.string, row_splits_dtype=tf.int64),
+        "label": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=0)
+    }
+    file_pattern = os.path.abspath(__file__).replace("data/movieLens_graph.py", "data/movieLens/ml-1m/graph.tfrecord")
+    return tf.data.experimental.make_batched_features_dataset(
+        file_pattern=file_pattern,
+        batch_size=batch_size,
+        features=example_schema,
+        reader=tf.data.TFRecordDataset,
+        label_key="label",
+        num_epochs=1,
+        shuffle=bool(shuffle_buffer_size),
+        shuffle_buffer_size=shuffle_buffer_size,
+        drop_final_batch=bool(shuffle_buffer_size))
+
+
 if __name__ == "__main__":
     train_file = os.path.abspath(__file__).replace("data/movieLens_graph.py", "data/movieLens/ml-1m/graph.tfrecord")
     generate_train_data(train_file, window_size=2, num_walks=5, walk_length=10, p=1, q=1,
