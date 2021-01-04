@@ -81,28 +81,27 @@ def generate_train_data(output_file, window_size, num_walks, walk_length, p, q, 
     movie_data = load_movie_data()
     records = []
     for walk in random_walks:
-        for i in range(window_size // 2, len(walk) - window_size // 2):
+        for i in range(window_size, len(walk) - window_size):
             neighbors = []
-            for j in range(window_size // 2):
+            for j in range(window_size):
                 if i - j - 1 >= 0:
                     neighbors.append(walk[i - j - 1])
                 if i + j + 1 < len(walk):
                     neighbors.append(walk[i + j + 1])
             feature = {
-                "movie_id": tf.train.Feature(bytes_list=tf.train.BytesList(value=[walk[i].encode('utf-8')]))
+                "movie_id": tf.train.Feature(int64_list=tf.train.Int64List(value=[walk[i]]))
             }
             if walk[i] in movie_data:
                 if "keywords" in movie_data[walk[i]]:
                     feature["keywords"] = tf.train.Feature(bytes_list=tf.train.BytesList(
-                        value=list(map(lambda x: x.encode("utf-8"), movie_data["keywords"]))))
+                        value=list(map(lambda x: x.encode("utf-8"), movie_data[walk[i]]["keywords"]))))
                 if "publishYear" in movie_data[walk[i]]:
                     feature["publishYear"] = tf.train.Feature(int64_list=tf.train.Int64List(
                         value=[movie_data[walk[i]]["publishYear"]]))
                 if "categories" in movie_data[walk[i]]:
                     feature["categories"] = tf.train.Feature(bytes_list=tf.train.BytesList(
                         value=list(map(lambda x: x.encode("utf-8"), movie_data[walk[i]]["categories"]))))
-            feature["labels"] = tf.train.Feature(bytes_list=tf.train.BytesList(
-                value=list(map(lambda x: x.encode("utf-8"), neighbors))))
+            feature["target_movie_ids"] = tf.train.Feature(int64_list=tf.train.Int64List(value=neighbors))
             example = tf.train.Example(features=tf.train.Features(feature=feature)).SerializeToString()
             records.append(example)
     random.shuffle(records)
@@ -113,4 +112,5 @@ def generate_train_data(output_file, window_size, num_walks, walk_length, p, q, 
 
 if __name__ == "__main__":
     train_file = os.path.abspath(__file__).replace("data/movieLens_graph.py", "data/movieLens/ml-1m/graph.tfrecord")
-    generate_train_data(train_file, window_size=5, num_walks=10, walk_length=20, p=1, q=1, rating_max_gap_second=int)
+    generate_train_data(train_file, window_size=2, num_walks=5, walk_length=10, p=1, q=1,
+                        rating_max_gap_second=999999999999, is_direct=False)
