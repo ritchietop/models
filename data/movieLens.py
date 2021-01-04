@@ -68,7 +68,7 @@ def load_user_data():
     return users
 
 
-def load_rating_data():
+def load_rating_data(revert=False):
     ratings = defaultdict(lambda: defaultdict(dict))
     path = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/ratings.dat")
     with open(path, "r") as f:
@@ -79,8 +79,12 @@ def load_rating_data():
             user_id, movie_id, rating, timestamp = line.strip("\n").split("::")
             user_id = int(user_id)
             movie_id = int(movie_id)
-            ratings[user_id][movie_id]["rating"] = int(rating)
-            ratings[user_id][movie_id]["timestamp"] = int(timestamp)
+            if revert:
+                ratings[movie_id][user_id]["rating"] = int(rating)
+                ratings[movie_id][user_id]["timestamp"] = int(timestamp)
+            else:
+                ratings[user_id][movie_id]["rating"] = int(rating)
+                ratings[user_id][movie_id]["timestamp"] = int(timestamp)
     return ratings
 
 
