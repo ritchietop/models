@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow.python.data.ops.readers import ParallelInterleaveDataset
 import os
 from collections import defaultdict
 import random
@@ -118,19 +119,15 @@ def gen_records(train_output, test_output, train_rate=0.8):
             if rating >= 3:
                 user_history_data["user_history_high_score_movies"].append(movie_id)
                 if "categories" in movies[movie_id]:
-                    for category in movies[movie_id]["categories"]:
-                        user_history_data["user_history_high_score_movie_categories"].append(category)
+                    user_history_data["user_history_high_score_movie_categories"].append(movies[movie_id]["categories"])
                 if "keywords" in movies[movie_id]:
-                    for keyword in movies[movie_id]["keywords"]:
-                        user_history_data["user_history_high_score_movie_keywords"].append(keyword)
+                    user_history_data["user_history_high_score_movie_keywords"].append(movies[movie_id]["keywords"])
             else:
                 user_history_data["user_history_low_score_movies"].append(movie_id)
                 if "categories" in movies[movie_id]:
-                    for category in movies[movie_id]["categories"]:
-                        user_history_data["user_history_low_score_movie_categories"].append(category)
+                    user_history_data["user_history_low_score_movie_categories"].append(movies[movie_id]["categories"])
                 if "keywords" in movies[movie_id]:
-                    for keyword in movies[movie_id]["keywords"]:
-                        user_history_data["user_history_low_score_movie_keywords"].append(keyword)
+                    user_history_data["user_history_low_score_movie_keywords"].append(movies[movie_id]["keywords"])
     test_f.close()
     with tf.io.TFRecordWriter(train_output) as f:
         random.shuffle(train_records)
@@ -139,55 +136,70 @@ def gen_records(train_output, test_output, train_rate=0.8):
 
 
 def gen_example(user_id, user_data, movie_id, movie_data, rating, user_history, timestamp):
-    features = {
+    context_features = {
         "label": tf.train.Feature(int64_list=tf.train.Int64List(value=[1 if rating >= 3 else 0])),
         "rating": tf.train.Feature(float_list=tf.train.FloatList(value=[rating])),
         "timestamp": tf.train.Feature(int64_list=tf.train.Int64List(value=[timestamp])),
         "user_id": tf.train.Feature(int64_list=tf.train.Int64List(value=[user_id])),
         "movie_id": tf.train.Feature(int64_list=tf.train.Int64List(value=[movie_id])),
     }
+    sequence_features = {}
     if "gender" in user_data:
-        features["gender"] = tf.train.Feature(
+        context_features["gender"] = tf.train.Feature(
             bytes_list=tf.train.BytesList(value=[user_data["gender"].encode("utf-8")]))
     if "age" in user_data:
-        features["age"] = tf.train.Feature(int64_list=tf.train.Int64List(value=[user_data["age"]]))
+        context_features["age"] = tf.train.Feature(int64_list=tf.train.Int64List(value=[user_data["age"]]))
     if "occupation" in user_data:
-        features["occupation"] = tf.train.Feature(
+        context_features["occupation"] = tf.train.Feature(
             bytes_list=tf.train.BytesList(value=[user_data["occupation"].encode("utf-8")]))
     if "zip_code" in user_data:
-        features["zip_code"] = tf.train.Feature(
+        context_features["zip_code"] = tf.train.Feature(
             bytes_list=tf.train.BytesList(value=[user_data["zip_code"].encode("utf-8")]))
     if "keywords" in movie_data:
-        features["keywords"] = tf.train.Feature(bytes_list=tf.train.BytesList(
+        context_features["keywords"] = tf.train.Feature(bytes_list=tf.train.BytesList(
             value=list(map(lambda x: x.encode("utf-8"), movie_data["keywords"]))))
     if "publishYear" in movie_data:
-        features["publishYear"] = tf.train.Feature(int64_list=tf.train.Int64List(value=[movie_data["publishYear"]]))
+        context_features["publishYear"] = tf.train.Feature(int64_list=tf.train.Int64List(value=[movie_data["publishYear"]]))
     if "categories" in movie_data:
-        features["categories"] = tf.train.Feature(bytes_list=tf.train.BytesList(
+        context_features["categories"] = tf.train.Feature(bytes_list=tf.train.BytesList(
             value=list(map(lambda x: x.encode("utf-8"), movie_data["categories"]))))
     if "user_history_high_score_movies" in user_history:
-        features["user_history_high_score_movies"] = tf.train.Feature(int64_list=tf.train.Int64List(
+        context_features["user_history_high_score_movies"] = tf.train.Feature(int64_list=tf.train.Int64List(
             value=user_history["user_history_high_score_movies"]))
     if "user_history_low_score_movies" in user_history:
-        features["user_history_low_score_movies"] = tf.train.Feature(int64_list=tf.train.Int64List(
+        context_features["user_history_low_score_movies"] = tf.train.Feature(int64_list=tf.train.Int64List(
             value=user_history["user_history_low_score_movies"]))
     if "user_history_high_score_movie_categories" in user_history:
-        features["user_history_high_score_movie_categories"] = tf.train.Feature(bytes_list=tf.train.BytesList(
-            value=list(map(lambda x: x.encode("utf-8"), user_history["user_history_high_score_movie_categories"]))))
+        sequence_features["user_history_high_score_movie_categories"] = tf.train.FeatureList(feature=[
+            tf.train.Feature(bytes_list=tf.train.BytesList(
+                value=list(map(lambda x: x.encode("utf-8"), movie_categories))))
+            for movie_categories in user_history["user_history_high_score_movie_categories"]
+        ])
     if "user_history_low_score_movie_categories" in user_history:
-        features["user_history_low_score_movie_categories"] = tf.train.Feature(bytes_list=tf.train.BytesList(
-            value=list(map(lambda x: x.encode("utf-8"), user_history["user_history_low_score_movie_categories"]))))
+        sequence_features["user_history_low_score_movie_categories"] = tf.train.FeatureList(feature=[
+            tf.train.Feature(bytes_list=tf.train.BytesList(
+                value=list(map(lambda x: x.encode("utf-8"), movie_categories))))
+            for movie_categories in user_history["user_history_low_score_movie_categories"]
+        ])
     if "user_history_high_score_movie_keywords" in user_history:
-        features["user_history_high_score_movie_keywords"] = tf.train.Feature(bytes_list=tf.train.BytesList(
-            value=list(map(lambda x: x.encode("utf-8"), user_history["user_history_high_score_movie_keywords"]))))
+        sequence_features["user_history_high_score_movie_keywords"] = tf.train.FeatureList(feature=[
+            tf.train.Feature(bytes_list=tf.train.BytesList(
+                value=list(map(lambda x: x.encode("utf-8"), movie_keywords))))
+            for movie_keywords in user_history["user_history_high_score_movie_keywords"]
+        ])
     if "user_history_low_score_movie_keywords" in user_history:
-        features["user_history_low_score_movie_keywords"] = tf.train.Feature(bytes_list=tf.train.BytesList(
-            value=list(map(lambda x: x.encode("utf-8"), user_history["user_history_low_score_movie_keywords"]))))
+        sequence_features["user_history_low_score_movie_keywords"] = tf.train.FeatureList(feature=[
+            tf.train.Feature(bytes_list=tf.train.BytesList(
+                value=list(map(lambda x: x.encode("utf-8"), movie_keywords))))
+            for movie_keywords in user_history["user_history_low_score_movie_keywords"]
+        ])
 
-    return tf.train.Example(features=tf.train.Features(feature=features))
+    return tf.train.SequenceExample(context=tf.train.Features(feature=context_features),
+                                    feature_lists=tf.train.FeatureLists(feature_list=sequence_features))
 
 
-def input_fn(file_pattern, batch_size, num_epochs, label_key, shuffle_buffer_size=None):
+def input_fn(file_pattern, batch_size, num_epochs, label_key, shuffle_buffer_size=None,
+             reader_num_threads=tf.data.AUTOTUNE, sloppy_ordering=False):
     example_schema = {
         "label": tf.io.FixedLenFeature(shape=(1,), dtype=tf.int64, default_value=0),
         "rating": tf.io.FixedLenFeature(shape=(1,), dtype=tf.float32, default_value=0),
@@ -208,16 +220,30 @@ def input_fn(file_pattern, batch_size, num_epochs, label_key, shuffle_buffer_siz
         "user_history_high_score_movie_keywords": tf.io.RaggedFeature(dtype=tf.string, row_splits_dtype=tf.int64),
         "user_history_low_score_movie_keywords": tf.io.RaggedFeature(dtype=tf.string, row_splits_dtype=tf.int64),
     }
-    return tf.data.experimental.make_batched_features_dataset(
-        file_pattern=file_pattern,
-        batch_size=batch_size,
-        features=example_schema,
-        reader=tf.data.TFRecordDataset,
-        label_key=label_key,
-        num_epochs=num_epochs,
-        shuffle=bool(shuffle_buffer_size),
-        shuffle_buffer_size=shuffle_buffer_size,
-        drop_final_batch=bool(shuffle_buffer_size))
+    dataset = tf.data.Dataset.list_files(file_pattern, shuffle=bool(shuffle_buffer_size))
+    if reader_num_threads == tf.data.AUTOTUNE:
+        dataset = dataset.interleave(lambda filename: tf.data.TFRecordDataset(filename),
+                                     num_parallel_calls=reader_num_threads)
+    else:
+        def apply_fn(dataset):
+            return ParallelInterleaveDataset(dataset, lambda filename: tf.data.TFRecordDataset(filename),
+                                             cycle_length=reader_num_threads, block_length=1, sloppy=sloppy_ordering,
+                                             buffer_output_elements=None, prefetch_input_elements=None)
+        dataset = dataset.apply(apply_fn)
+    if shuffle_buffer_size is not None:
+        dataset = dataset.shuffle(shuffle_buffer_size)
+    if num_epochs != 1:
+        dataset = dataset.repeat(num_epochs)
+    dataset = dataset.batch(batch_size, drop_remainder=bool(shuffle_buffer_size) or num_epochs is None)
+    def apply_parse_fn(dataset):
+        pass
+    dataset = dataset.apply()
+    if label_key is not None:
+        if label_key not in example_schema:
+            raise ValueError("The 'label_key' provided (%r) must be one of the 'features' keys." % label_key)
+        dataset = dataset.map(lambda x: (x, x.pop(label_key)))
+    dataset = dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
+    return dataset
 
 
 def train_input_fn(batch_size, label_key="rating"):
@@ -257,6 +283,6 @@ def test_input_fn(batch_size, label_key="rating"):
 
 
 if __name__ == "__main__":
-    train_file = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/train.tfrecord")
-    test_file = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/test.tfrecord")
+    train_file = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/train2.tfrecord")
+    test_file = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/test2.tfrecord")
     gen_records(train_file, test_file, train_rate=0.8)
