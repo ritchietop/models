@@ -95,22 +95,24 @@ def din_model(hidden_units: List[int], dropout: float):
     ])
 
     # attention be
+    attention_behavior_profile_embed_layer = AttentionUnitLayer()(inputs=[
+        candidate_profile_embed_layer, behavior_profile_embed_layer
+    ])
 
     model = tf.keras.Model(inputs=[
         timestamp, gender, age, occupation, zip_code, movie_id, keywords, categories,
         user_history_high_score_movies, user_history_high_score_movie_keywords,
         user_history_high_score_movie_categories
     ], outputs=[
-        # context_profile_embed_layer, user_profile_embed_layer, candidate_profile_embed_layer,
-        # behavior_profile_embed_layer
-        candidate_profile_embed_layer
+        context_profile_embed_layer, user_profile_embed_layer, candidate_profile_embed_layer,
+        attention_behavior_profile_embed_layer
     ])
 
     return model
 
 
 # tensor: [batch_size, record_count, embedding_size]
-def embedding_pooling(tensor: tf.RaggedTensor, combiner: str = "sqrtn"):
+def embedding_pooling(tensor, combiner: str = "sqrtn"):
     tensor_sum = tf.math.reduce_sum(tensor, axis=1)  # batch_size * embedding_size
     if combiner == "sum":
         return tensor_sum
@@ -118,8 +120,7 @@ def embedding_pooling(tensor: tf.RaggedTensor, combiner: str = "sqrtn"):
         row_lengths = tf.expand_dims(tensor.row_lengths(axis=1), axis=1)  # batch_size * 1
         row_lengths = tf.math.maximum(tf.ones_like(row_lengths), row_lengths)
     elif isinstance(tensor, tf.Tensor):
-        row_lengths = tf.squeeze(tf.ones_like(tensor), axis=2) * tensor.shape[1]
-        print(row_lengths)
+        row_lengths = tensor.shape[1]
     else:
         raise ValueError("Only support Tensor or RaggedTensor.")
     row_lengths = tf.cast(row_lengths, dtype=tf.float32)
@@ -147,6 +148,7 @@ def multi_behavior_embedding_pooling(tensor: tf.RaggedTensor, combiner: str = "s
         return tensor_sum / tf.math.sqrt(row_lengths)
 
 
+# output: [batch_size, 1, embedding_size]
 class AttentionUnitLayer(tf.keras.layers.Layer):
     def __init__(self, trainable=True, name=None, **kwargs):
         super(AttentionUnitLayer, self).__init__(trainable=trainable, name=name, **kwargs)
