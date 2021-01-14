@@ -77,8 +77,8 @@ def din_model(hidden_units: List[int], dropout: float):
     candidate_keywords_embed_layer = embedding_pooling_layer(candidate_keywords_embed_layer)
     candidate_categories_embed_layer = categories_embed_layer(categories_layer(categories))
     candidate_categories_embed_layer = embedding_pooling_layer(candidate_categories_embed_layer)
-    # batch_size * 1 * embedding_size
-    candidate_profile_embed_layer = tf.keras.layers.Concatenate(axis=-1)(inputs=[
+    # batch_size * embedding_size
+    candidate_profile_embed_layer = tf.keras.layers.Concatenate(axis=1)(inputs=[
         candidate_id_embed_layer, candidate_keywords_embed_layer, candidate_categories_embed_layer
     ])
 
@@ -94,19 +94,28 @@ def din_model(hidden_units: List[int], dropout: float):
         behavior_id_embed_layer, behavior_keywords_embed_layer, behavior_categories_embed_layer
     ])
 
-    # attention be
-    attention_behavior_profile_embed_layer = AttentionUnitLayer()(inputs=[
-        candidate_profile_embed_layer, behavior_profile_embed_layer
-    ])
+    # # attention be
+    # attention_behavior_profile_embed_layer = AttentionUnitLayer()(inputs=[
+    #     candidate_profile_embed_layer, behavior_profile_embed_layer
+    # ])
+    #
+    # all_inputs_layer = tf.keras.layers.Concatenate()(inputs=[
+    #     context_profile_embed_layer, user_profile_embed_layer, candidate_profile_embed_layer,
+    #     attention_behavior_profile_embed_layer
+    # ])
+    #
+    # for hidden_unit in hidden_units:
+    #     all_inputs_layer = tf.keras.layers.Dense(units=hidden_unit)(all_inputs_layer)
+    #     all_inputs_layer = DiceActivation()(all_inputs_layer)
+    #     all_inputs_layer = tf.keras.layers.Dropout(rate=dropout)(all_inputs_layer)
+    #
+    # predict = tf.keras.layers.Lambda(lambda tensor: tf.nn.softmax(tensor))(all_inputs_layer)
 
     model = tf.keras.Model(inputs=[
         timestamp, gender, age, occupation, zip_code, movie_id, keywords, categories,
         user_history_high_score_movies, user_history_high_score_movie_keywords,
         user_history_high_score_movie_categories
-    ], outputs=[
-        context_profile_embed_layer, user_profile_embed_layer, candidate_profile_embed_layer,
-        attention_behavior_profile_embed_layer
-    ])
+    ], outputs=[candidate_profile_embed_layer])
 
     return model
 
@@ -153,6 +162,17 @@ class AttentionUnitLayer(tf.keras.layers.Layer):
     def __init__(self, trainable=True, name=None, **kwargs):
         super(AttentionUnitLayer, self).__init__(trainable=trainable, name=name, **kwargs)
 
+    def call(self, inputs, **kwargs):
+        # candidate_tensor: batch * embedding
+        # behavior_ragged_tensors: batch * behavior_count(None) * embedding
+        candidate_tensor, behavior_ragged_tensors = inputs
+        # batch * behavior_count(None) * embedding * embedding
+        behavior_ragged_tensors =
+        outer_product_tensor = tf.matmul(tf.expand_dims(behavior_ragged_tensors, axis=3),
+                                         tf.expand_dims(candidate_tensor, axis=1))
+
+
+
 
 class DiceActivation(tf.keras.layers.Layer):
     def __init__(self, axis=-1, epsilon=0.0000000001, trainable=True, name=None, **kwargs):
@@ -196,7 +216,7 @@ def main(_):
         xx = model(features)
         #print(features["user_history_high_score_movie_keywords"])
         #print(xx)
-        print([x.shape for x in xx])
+        print(type(xx))
         # print(features["user_history_low_score_movie_keywords"].shape)
         # print(behavior_keywords_embed_layer.shape)
         # tensor_sum = tf.math.reduce_sum(behavior_keywords_embed_layer, axis=-2)
