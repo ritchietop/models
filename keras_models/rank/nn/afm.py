@@ -57,8 +57,7 @@ def afm_model(embedding_size, l2_factor, hidden_unit, dropout):
         timestamp_hour_lr_layer, timestamp_week_lr_layer, gender_lr_layer, age_lr_layer, occupation_lr_layer,
         zip_code_lr_layer, keywords_lr_layer, publish_year_lr_layer, categories_lr_layer
     ])
-    lr_input_layer = tf.keras.layers.Dense(units=1, name="LinearLayer", use_bias=True,
-                                           kernel_regularizer=tf.keras.regularizers.l2(l2_factor))(lr_input_layer)
+    lr_input_layer = tf.keras.layers.Dense(units=1, name="LinearLayer", use_bias=True)(lr_input_layer)
 
     # fm
     embedding_pooling_layer = tf.keras.layers.Lambda(lambda tensor: embedding_pooling(tensor), name="EmbeddingPooling")
