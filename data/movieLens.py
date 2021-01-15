@@ -89,7 +89,7 @@ def load_rating_data(revert=False):
     return ratings
 
 
-def gen_records(train_output, test_output, train_rate=0.8):
+def gen_records(train_output, test_output, train_rate=0.8, behavior_max_count=10):
     users = load_user_data()
     movies = load_movie_data()
     ratings = load_rating_data()
@@ -110,7 +110,7 @@ def gen_records(train_output, test_output, train_rate=0.8):
         for movie_id, rating_info in user_behaviors:
             rating, timestamp = rating_info["rating"], rating_info["timestamp"]
             example = gen_example(user_id, users[user_id], movie_id, movies[movie_id], rating, user_history_data,
-                                  timestamp)
+                                  timestamp, behavior_max_count)
             if behavior_count <= train_behavior_count:
                 train_records.append(example.SerializeToString())
             else:
@@ -135,7 +135,7 @@ def gen_records(train_output, test_output, train_rate=0.8):
             f.write(record)
 
 
-def gen_example(user_id, user_data, movie_id, movie_data, rating, user_history, timestamp):
+def gen_example(user_id, user_data, movie_id, movie_data, rating, user_history, timestamp, behavior_max_count):
     context_features = {
         "label": tf.train.Feature(int64_list=tf.train.Int64List(value=[1 if rating >= 3 else 0])),
         "rating": tf.train.Feature(float_list=tf.train.FloatList(value=[rating])),
@@ -165,33 +165,33 @@ def gen_example(user_id, user_data, movie_id, movie_data, rating, user_history, 
             value=list(map(lambda x: x.encode("utf-8"), movie_data["categories"]))))
     if "user_history_high_score_movies" in user_history:
         context_features["user_history_high_score_movies"] = tf.train.Feature(int64_list=tf.train.Int64List(
-            value=user_history["user_history_high_score_movies"]))
+            value=user_history["user_history_high_score_movies"][:behavior_max_count]))
     if "user_history_low_score_movies" in user_history:
         context_features["user_history_low_score_movies"] = tf.train.Feature(int64_list=tf.train.Int64List(
-            value=user_history["user_history_low_score_movies"]))
+            value=user_history["user_history_low_score_movies"][:behavior_max_count]))
     if "user_history_high_score_movie_categories" in user_history:
         sequence_features["user_history_high_score_movie_categories"] = tf.train.FeatureList(feature=[
             tf.train.Feature(bytes_list=tf.train.BytesList(
                 value=list(map(lambda x: x.encode("utf-8"), movie_categories))))
-            for movie_categories in user_history["user_history_high_score_movie_categories"]
+            for movie_categories in user_history["user_history_high_score_movie_categories"][:behavior_max_count]
         ])
     if "user_history_low_score_movie_categories" in user_history:
         sequence_features["user_history_low_score_movie_categories"] = tf.train.FeatureList(feature=[
             tf.train.Feature(bytes_list=tf.train.BytesList(
                 value=list(map(lambda x: x.encode("utf-8"), movie_categories))))
-            for movie_categories in user_history["user_history_low_score_movie_categories"]
+            for movie_categories in user_history["user_history_low_score_movie_categories"][:behavior_max_count]
         ])
     if "user_history_high_score_movie_keywords" in user_history:
         sequence_features["user_history_high_score_movie_keywords"] = tf.train.FeatureList(feature=[
             tf.train.Feature(bytes_list=tf.train.BytesList(
                 value=list(map(lambda x: x.encode("utf-8"), movie_keywords))))
-            for movie_keywords in user_history["user_history_high_score_movie_keywords"]
+            for movie_keywords in user_history["user_history_high_score_movie_keywords"][:behavior_max_count]
         ])
     if "user_history_low_score_movie_keywords" in user_history:
         sequence_features["user_history_low_score_movie_keywords"] = tf.train.FeatureList(feature=[
             tf.train.Feature(bytes_list=tf.train.BytesList(
                 value=list(map(lambda x: x.encode("utf-8"), movie_keywords))))
-            for movie_keywords in user_history["user_history_low_score_movie_keywords"]
+            for movie_keywords in user_history["user_history_low_score_movie_keywords"][:behavior_max_count]
         ])
 
     return tf.train.SequenceExample(context=tf.train.Features(feature=context_features),
@@ -289,6 +289,6 @@ def test_input_fn(batch_size, label_key="rating"):
 
 
 if __name__ == "__main__":
-    train_file = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/train2.tfrecord")
-    test_file = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/test2.tfrecord")
-    gen_records(train_file, test_file, train_rate=0.8)
+    train_file = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/train.tfrecord")
+    test_file = os.path.abspath(__file__).replace("data/movieLens.py", "data/movieLens/ml-1m/test.tfrecord")
+    gen_records(train_file, test_file, train_rate=0.8, behavior_max_count=10)
