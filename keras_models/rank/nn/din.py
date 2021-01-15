@@ -116,7 +116,7 @@ def din_model(hidden_units: List[int], dropout: float, attention_hidden_unit: in
         all_inputs_layer = DiceActivation()(all_inputs_layer)
         all_inputs_layer = tf.keras.layers.Dropout(rate=dropout)(all_inputs_layer)
 
-    predict = tf.keras.layers.Lambda(lambda tensor: tf.nn.softmax(tensor), name="Softmax")(all_inputs_layer)
+    predict = tf.keras.layers.Dense(units=2, activation=tf.keras.activations.softmax)(all_inputs_layer)
 
     model = tf.keras.Model(inputs=[
         timestamp, gender, age, occupation, zip_code, movie_id, keywords, categories,
