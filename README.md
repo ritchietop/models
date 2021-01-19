@@ -1,6 +1,6 @@
 # models
 
-###[**召回模型**](https://github.com/ritchietop/models/tree/main/keras_models/recall)
+### [**召回模型**](https://github.com/ritchietop/models/tree/main/keras_models/recall)
 
 [Item2Vec](https://github.com/ritchietop/models/blob/main/keras_models/recall/item2vec.py)
 
@@ -8,7 +8,7 @@
 
 [Eges](https://github.com/ritchietop/models/blob/main/keras_models/recall/eges.py)
 
-###[**传统排序模型**](https://github.com/ritchietop/models/tree/main/keras_models/rank/ml)
+### [**传统排序模型**](https://github.com/ritchietop/models/tree/main/keras_models/rank/ml)
 
 [LR](https://github.com/ritchietop/models/blob/main/keras_models/rank/ml/lr.py)
 
@@ -22,7 +22,7 @@
 
 [MLR](https://github.com/ritchietop/models/blob/main/keras_models/rank/ml/mlr.py)
 
-###[**深度排序模型**](https://github.com/ritchietop/models/tree/main/keras_models/rank/nn)
+### [**深度排序模型**](https://github.com/ritchietop/models/tree/main/keras_models/rank/nn)
 
 [AFM](https://github.com/ritchietop/models/blob/main/keras_models/rank/nn/afm.py)
 
